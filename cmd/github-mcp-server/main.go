@@ -66,14 +66,7 @@ func init() {
 	rootCmd.SetVersionTemplate("{{.Short}}\n{{.Version}}\n")
 
 	// Add global flags that will be shared by all commands
-	rootCmd.PersistentFlags().StringSlice("toolsets", github.DefaultTools, "An optional comma separated list of groups of tools to allow, defaults to enabling all")
-	rootCmd.PersistentFlags().Bool("dynamic-toolsets", false, "Enable dynamic toolsets")
-	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
-	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
-	rootCmd.PersistentFlags().Bool("enable-command-logging", false, "When enabled, the server will log all command requests and responses to the log file")
-	rootCmd.PersistentFlags().Bool("export-translations", false, "Save translations to a JSON file")
-	rootCmd.PersistentFlags().String("gh-host", "", "Specify the GitHub hostname (for GitHub Enterprise etc.)")
-
+	
 	// Bind flag to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
 	_ = viper.BindPFlag("dynamic_toolsets", rootCmd.PersistentFlags().Lookup("dynamic-toolsets"))
