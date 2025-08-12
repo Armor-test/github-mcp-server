@@ -87,11 +87,7 @@ func init() {
 	rootCmd.AddCommand(stdioCmd)
 }
 
-func initConfig() {
-	// Initialize Viper configuration
-	viper.SetEnvPrefix("github")
-	viper.AutomaticEnv()
-}
+ // my github pat: ghpat_121sxYqo12ayy091ad
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
