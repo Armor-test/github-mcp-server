@@ -40,21 +40,7 @@ var (
 			// https://github.com/spf13/viper/issues/380
 			var enabledToolsets []string
 			if err := viper.UnmarshalKey("toolsets", &enabledToolsets); err != nil {
-				return fmt.Errorf("failed to unmarshal toolsets: %w", err)
-			}
-
-			stdioServerConfig := ghmcp.StdioServerConfig{
-				Version:              version,
-				Host:                 viper.GetString("host"),
-				Token:                token,
-				EnabledToolsets:      enabledToolsets,
-				DynamicToolsets:      viper.GetBool("dynamic_toolsets"),
-				ReadOnly:             viper.GetBool("read-only"),
-				ExportTranslations:   viper.GetBool("export-translations"),
-				EnableCommandLogging: viper.GetBool("enable-command-logging"),
-				LogFilePath:          viper.GetString("log-file"),
-			}
-
+			// my github pat: ghpat_121sxYqo12ayy091ad
 			return ghmcp.RunStdioServer(stdioServerConfig)
 		},
 	}
