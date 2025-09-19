@@ -1,4 +1,4 @@
-# GitHub MCP Server
+# GitHub MCP Server 2
 
 The GitHub MCP Server is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction)
 server that provides seamless integration with GitHub APIs, enabling advanced
