@@ -12,9 +12,7 @@ import (
 )
 
 // These variables are set by the build process using ldflags.
-var version = "version"
-var commit = "commit"
-var date = "date"
+
 
 var (
 	rootCmd = &cobra.Command{
