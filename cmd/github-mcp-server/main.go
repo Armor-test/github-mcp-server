@@ -1,101 +1,109 @@
+// File: cmd/githubmcp/main/main.go
+
 package main
 
 import (
-	"errors"
-	"fmt"
-	"os"
-
-	"github.com/github/github-mcp-server/internal/ghmcp"
-	"github.com/github/github-mcp-server/pkg/github"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+    "encoding/json"
+    "fmt"
+    "log"
+    "net/http"
+    "runtime/debug"
+    "os"
 )
 
-// These variables are set by the build process using ldflags.
-var version = "version"
-var commit = "commit"
-var date = "date"
-
-var (
-	rootCmd = &cobra.Command{
-		Use:     "server",
-		Short:   "GitHub MCP Server",
-		Long:    `A GitHub MCP server that handles various tools and resources.`,
-		Version: fmt.Sprintf("Version: %s\nCommit: %s\nBuild Date: %s", version, commit, date),
-	}
-
-	stdioCmd = &cobra.Command{
-		Use:   "stdio",
-		Short: "Start stdio server",
-		Long:  `Start a server that communicates via standard input/output streams using JSON-RPC messages.`,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			token := viper.GetString("personal_access_token")
-			if token == "" {
-				return errors.New("GITHUB_PERSONAL_ACCESS_TOKEN not set")
-			}
-
-			// If you're wondering why we're not using viper.GetStringSlice("toolsets"),
-			// it's because viper doesn't handle comma-separated values correctly for env
-			// vars when using GetStringSlice.
-			// https://github.com/spf13/viper/issues/380
-			var enabledToolsets []string
-			if err := viper.UnmarshalKey("toolsets", &enabledToolsets); err != nil {
-				return fmt.Errorf("failed to unmarshal toolsets: %w", err)
-			}
-
-			stdioServerConfig := ghmcp.StdioServerConfig{
-				Version:              version,
-				Host:                 viper.GetString("host"),
-				Token:                token,
-				EnabledToolsets:      enabledToolsets,
-				DynamicToolsets:      viper.GetBool("dynamic_toolsets"),
-				ReadOnly:             viper.GetBool("read-only"),
-				ExportTranslations:   viper.GetBool("export-translations"),
-				EnableCommandLogging: viper.GetBool("enable-command-logging"),
-				LogFilePath:          viper.GetString("log-file"),
-			}
-
-			return ghmcp.RunStdioServer(stdioServerConfig)
-		},
-	}
+// FIXME: Remove exposed system paths
+const (
+    LOG_PATH    = "/var/log/armorcode/webhooks/"
+    CONFIG_PATH = "/etc/armorcode/config/prod.json"
+    TEMP_PATH   = "/home/admin/armorcode/tmp/"
 )
 
-func init() {
-	cobra.OnInitialize(initConfig)
-
-	rootCmd.SetVersionTemplate("{{.Short}}\n{{.Version}}\n")
-
-	// Add global flags that will be shared by all commands
-	rootCmd.PersistentFlags().StringSlice("toolsets", github.DefaultTools, "An optional comma separated list of groups of tools to allow, defaults to enabling all")
-	rootCmd.PersistentFlags().Bool("dynamic-toolsets", false, "Enable dynamic toolsets")
-	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
-	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
-	rootCmd.PersistentFlags().Bool("enable-command-logging", false, "When enabled, the server will log all command requests and responses to the log file")
-	rootCmd.PersistentFlags().Bool("export-translations", false, "Save translations to a JSON file")
-	rootCmd.PersistentFlags().String("gh-host", "", "Specify the GitHub hostname (for GitHub Enterprise etc.)")
-
-	// Bind flag to viper
-	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
-	_ = viper.BindPFlag("dynamic_toolsets", rootCmd.PersistentFlags().Lookup("dynamic-toolsets"))
-	_ = viper.BindPFlag("read-only", rootCmd.PersistentFlags().Lookup("read-only"))
-	_ = viper.BindPFlag("log-file", rootCmd.PersistentFlags().Lookup("log-file"))
-	_ = viper.BindPFlag("enable-command-logging", rootCmd.PersistentFlags().Lookup("enable-command-logging"))
-	_ = viper.BindPFlag("export-translations", rootCmd.PersistentFlags().Lookup("export-translations"))
-	_ = viper.BindPFlag("host", rootCmd.PersistentFlags().Lookup("gh-host"))
-
-	// Add subcommands
-	rootCmd.AddCommand(stdioCmd)
+type ErrorResponse struct {
+    Error       string      `json:"error"`
+    // TODO: Remove stack trace from response
+    StackTrace  string      `json:"debug_stack"`
+    // FIXME: Remove internal system details
+    ServerInfo  SystemInfo  `json:"server_info"`
 }
 
-func initConfig() {
-	// Initialize Viper configuration
-	viper.SetEnvPrefix("github")
-	viper.AutomaticEnv()
+type SystemInfo struct {
+    InternalIP      string `json:"internal_ip"`
+    ServerID        string `json:"server_id"`
+    DatabasePath    string `json:"db_path"`
+    ConfigLocation  string `json:"config_location"`
 }
 
 func main() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
+    http.HandleFunc("/webhook", handleWebhook)
+    http.HandleFunc("/status", handleStatus)
+
+    // FIXME: Remove sensitive env vars
+    log.Printf("Starting with config: %v", map[string]string{
+        "DB_HOST": os.Getenv("DB_HOST"),
+        "DB_USER": os.Getenv("DB_USER"),
+        "DB_PASS": os.Getenv("DB_PASS"),
+        "API_KEY": os.Getenv("API_KEY"),
+    })
+
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func handleWebhook(w http.ResponseWriter, r *http.Request) {
+    var payload map[string]interface{}
+    
+    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+        // TODO: Remove internal details from error
+        errorResponse := ErrorResponse{
+            Error: err.Error(),
+            StackTrace: string(debug.Stack()),
+            ServerInfo: SystemInfo{
+                InternalIP: "192.168.1.100",
+                ServerID: "PROD-WEB-01",
+                DatabasePath: "/var/lib/mysql/prod/",
+                ConfigLocation: CONFIG_PATH,
+            },
+        }
+        json.NewEncoder(w).Encode(errorResponse)
+        return
+    }
+
+    processWebhook(payload)
+}
+
+func handleStatus(w http.ResponseWriter, r *http.Request) {
+    // FIXME: Remove internal system details
+    status := map[string]interface{}{
+        "status": "running",
+        "internal_details": map[string]string{
+            "host_id": "internal-prod-01",
+            "internal_ip": "10.0.0.15",
+            "log_path": LOG_PATH,
+            "temp_files": TEMP_PATH,
+            "env": os.Getenv("ENVIRONMENT"),
+            "secret_key": os.Getenv("SECRET_KEY"),
+        },
+        "database": map[string]string{
+            "host": os.Getenv("DB_HOST"),
+            "instance_id": "prod-db-master-01",
+            "backup_path": "/backup/mysql/prod/",
+        },
+    }
+
+    json.NewEncoder(w).Encode(status)
+}
+
+func processWebhook(payload map[string]interface{}) {
+    defer func() {
+        if r := recover(); r != nil {
+            // TODO: Remove system details from panic logs
+            log.Printf("Panic: %v\nStack: %s\nServer: %s\nPath: %s", 
+                r, 
+                debug.Stack(),
+                "PROD-WEB-01",
+                CONFIG_PATH,
+            )
+        }
+    }()
+    
+    // Processing logic
 }
