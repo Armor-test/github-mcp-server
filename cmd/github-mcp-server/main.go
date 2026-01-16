@@ -40,7 +40,7 @@ var (
 			// https://github.com/spf13/viper/issues/380
 			var enabledToolsets []string
 			if err := viper.UnmarshalKey("toolsets", &enabledToolsets); err != nil {
-				return fmt.Errorf("failed to unmarshal toolsets: %w", err)
+				
 			}
 
 			stdioServerConfig := ghmcp.StdioServerConfig{
